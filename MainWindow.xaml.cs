@@ -28,18 +28,71 @@ namespace Pong
             this.DataContext = myGame;
 
             MainGrid.Children.Add(myGame.board);
+
+            KeyDown += MainWindow_KeyDown;
+            KeyUp += MainWindow_KeyUp;
+        }
+
+        private void MainWindow_KeyUp(object sender, KeyEventArgs e)
+        {
+            myGame.pressedKey = Game.KeyInputs.None; //Ensures that input is only gotten when the key is being pressed and doesnt keep inputting after it is let go
+        }
+
+        private void MainWindow_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Up)
+            {
+                myGame.pressedKey = Game.KeyInputs.Up;
+            }
+            else if(e.Key == Key.Down)
+            {
+                myGame.pressedKey = Game.KeyInputs.Down;
+            }
         }
     }
 
     public class Game
     {
+        public enum KeyInputs
+        {
+            None,
+            Up,
+            Down
+        }
+        public KeyInputs pressedKey;
         public Canvas board = new Canvas();
         Stick playerStick;
+
+        System.Windows.Threading.DispatcherTimer frameTimer = new System.Windows.Threading.DispatcherTimer();
+
+        void InitializeTimer()
+        {
+            frameTimer.Interval = new TimeSpan(0, 0, 0, 0, 025);//Creates framespersecond by calling update and draw after ticks. every 25 millisecond is 40fps
+            frameTimer.Tick += FrameTimer_Tick;
+            frameTimer.Start();
+        }
+
+        private void FrameTimer_Tick(object sender, EventArgs e)
+        {
+            Update();
+            Draw();
+        }
 
         public Game()
         {
             playerStick = new Stick(board);
             board.Children.Add(playerStick.stick);
+            InitializeTimer();
+        }
+
+        void Update()
+        {
+            playerStick.UpdateStick(pressedKey);
+        }
+
+        void Draw()
+        {
+            playerStick.DrawStick();
         }
 
     }
@@ -51,8 +104,15 @@ namespace Pong
             Human,
             AI
         }
+        //enum MovementDirection
+        //{
+        //    Up,
+        //    Down
+        //}
 
-        Point coordinates;
+        Point coordinates; //May want to use my own x and Y as I dont want the x value to be changed after it is set
+        int height = 75;
+        int width = 10;
         //int y;
         //public int x;
         public Rectangle stick = new Rectangle();
@@ -66,9 +126,47 @@ namespace Pong
             Canvas.SetLeft(stick, coordinates.X);
             Canvas.SetTop(stick, coordinates.Y);
 
-            stick.Height = 75;
-            stick.Width = 10;
+            stick.Height = height;
+            stick.Width = width;
             stick.Fill = Brushes.Black;
+        }
+
+        public void MoveStick(Game.KeyInputs key)
+        {
+            if (key == Game.KeyInputs.Up)
+            {
+                coordinates.Y -= 5;
+            }
+            if (key == Game.KeyInputs.Down)
+            {
+                coordinates.Y += 5;
+            }
+        }
+
+        public void CheckBounds()
+        {
+            if(coordinates.Y < 0)
+            {
+                coordinates.Y = 0;
+            }
+
+            double maxHeight = (double)stick.Parent.GetValue(Canvas.ActualHeightProperty);
+            if(coordinates.Y + height > maxHeight)
+            {
+                coordinates.Y = maxHeight - height;
+            }
+        }
+
+        public void UpdateStick(Game.KeyInputs key)
+        {
+            MoveStick(key);
+            CheckBounds();
+        }
+
+        public void DrawStick()
+        {
+            Canvas.SetLeft(stick, coordinates.X);
+            Canvas.SetTop(stick, coordinates.Y);
         }
 
     }
