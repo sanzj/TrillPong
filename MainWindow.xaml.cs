@@ -62,6 +62,7 @@ namespace Pong
         public KeyInputs pressedKey;
         public Canvas board = new Canvas();
         Stick playerStick;
+        Ball gameBall;
 
         System.Windows.Threading.DispatcherTimer frameTimer = new System.Windows.Threading.DispatcherTimer();
 
@@ -80,44 +81,83 @@ namespace Pong
 
         public Game()
         {
-            playerStick = new Stick(board);
+            playerStick = new Stick();
+            gameBall = new Ball();
             board.Children.Add(playerStick.stick);
+            board.Children.Add(gameBall.ball);
             InitializeTimer();
+        }
+
+        void CheckForPongHit(Ball ball, Stick stick)
+        {
+            if(ball.coordinates.X + ball.width >= stick.coordinates.X && ball.coordinates.Y + ball.height >= stick.coordinates.Y && ball.coordinates.Y < stick.coordinates.Y + stick.height)
+            {//in here I should map where the the ball has hit the stick and accordingly change the deflection angle through the speed
+                ball.xSpeed = ball.xSpeed * -1;
+            }
+        }
+
+        void CheckForCollision()
+        {//I should move all collision checks even stick and canvas collision here. each class should just handle itself and not have to checkj if it hit another class
+
+            //Check if the ball has collided with a stick and if so call a function on it or maybe raise an event for it IDK
+            CheckForPongHit(gameBall, playerStick);
+
+            //Checks playerStick-CanvasCollision
+            {
+                if (playerStick.coordinates.Y < 0)
+                {
+                    playerStick.coordinates.Y = 0;
+                }
+
+                double maxHeight = board.ActualHeight;
+                if (playerStick.coordinates.Y + playerStick.height > maxHeight)
+                {
+                    playerStick.coordinates.Y = maxHeight - playerStick.height;
+                }
+            }
         }
 
         void Update()
         {
-            playerStick.UpdateStick(pressedKey);
+            playerStick.Update(pressedKey);
+            gameBall.Update();
+            CheckForCollision();
         }
 
         void Draw()
         {
-            playerStick.DrawStick();
+            playerStick.Draw();
+            gameBall.Draw();
         }
 
     }
 
-    public class Stick
+    public abstract class GameShape
+    {
+        public Point coordinates;
+        public int height;
+        public int width;
+
+        //abstract public void Update(); // I should figure out a way to make the sick update not take in a parameter to help with implementing bette OOP functionality
+        abstract public void Draw();
+    }
+
+    public class Stick : GameShape
     {
         enum ControlType
         {
             Human,
             AI
         }
-        //enum MovementDirection
-        //{
-        //    Up,
-        //    Down
-        //}
 
-        Point coordinates; //May want to use my own x and Y as I dont want the x value to be changed after it is set
-        int height = 75;
-        int width = 10;
+        public Point coordinates; //May want to use my own x and Y as I dont want the x value to be changed after it is set
+        public readonly int height = 75;
+        public readonly int width = 10;
         //int y;
         //public int x;
         public Rectangle stick = new Rectangle();
 
-        public Stick(Canvas board)
+        public Stick()
         {//Make this take into account the ControlType of the new stick as this only works for the one placed on the right which is the player controlled one
          //Also the actual width and height property on canvas are not initialized until after I initialize my game class and thus cannot be used in setting coord. so i use vals
             coordinates.X = 500;
@@ -143,31 +183,53 @@ namespace Pong
             }
         }
 
-        public void CheckBounds()
-        {
-            if(coordinates.Y < 0)
-            {
-                coordinates.Y = 0;
-            }
-
-            double maxHeight = (double)stick.Parent.GetValue(Canvas.ActualHeightProperty);
-            if(coordinates.Y + height > maxHeight)
-            {
-                coordinates.Y = maxHeight - height;
-            }
-        }
-
-        public void UpdateStick(Game.KeyInputs key)
+        public void Update(Game.KeyInputs key)
         {
             MoveStick(key);
-            CheckBounds();
         }
 
-        public void DrawStick()
+        public override void Draw()
         {
             Canvas.SetLeft(stick, coordinates.X);
             Canvas.SetTop(stick, coordinates.Y);
         }
+    }
 
+    public class Ball : GameShape
+    {
+        public Point coordinates;
+        public Ellipse ball;
+        public int xSpeed = 5;
+        public int ySpeed = 0;
+        public readonly int height = 25;
+        public readonly int width = 25;
+
+        public Ball()
+        {
+            ball = new Ellipse();
+            ball.Height = height;
+            ball.Width = width;
+            ball.Fill = Brushes.Crimson;
+
+            coordinates.X = 200;
+            coordinates.Y = 200;
+        }
+
+        void MoveBall()
+        {
+            coordinates.X += xSpeed;
+            coordinates.Y += ySpeed;
+        }
+
+        public void Update()
+        {
+            MoveBall();
+        }
+
+        public override void Draw()
+        {
+            Canvas.SetLeft(ball, coordinates.X);
+            Canvas.SetTop(ball, coordinates.Y);
+        }
     }
 }
