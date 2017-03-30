@@ -29,25 +29,8 @@ namespace Pong
 
             MainGrid.Children.Add(myGame.board);
 
-            KeyDown += MainWindow_KeyDown;
-            KeyUp += MainWindow_KeyUp;
-        }
-
-        private void MainWindow_KeyUp(object sender, KeyEventArgs e)
-        {
-            myGame.pressedKey = Game.KeyInputs.None; //Ensures that input is only gotten when the key is being pressed and doesnt keep inputting after it is let go
-        }
-
-        private void MainWindow_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Up)
-            {
-                myGame.pressedKey = Game.KeyInputs.Up;
-            }
-            else if(e.Key == Key.Down)
-            {
-                myGame.pressedKey = Game.KeyInputs.Down;
-            }
+            KeyDown += myGame.OnKeyPressed;
+            KeyUp += myGame.OnKeyUp;
         }
     }
 
@@ -59,9 +42,11 @@ namespace Pong
             Up,
             Down
         }
-        public KeyInputs pressedKey;
+        public KeyInputs playerOneKeyInput;
+        public KeyInputs playerTwoKeyInput;
         public Canvas board = new Canvas();
-        Stick playerStick;
+        HumanStick playerOne; //On Right side
+        AIStick playerTwo; //On Left Side
         Ball gameBall;
 
         System.Windows.Threading.DispatcherTimer frameTimer = new System.Windows.Threading.DispatcherTimer();
@@ -79,114 +64,269 @@ namespace Pong
             Draw();
         }
 
+        public void OnKeyPressed(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Up)
+            {
+                playerOneKeyInput = Game.KeyInputs.Up;
+                playerOneInputChanged();
+            }
+            else if (e.Key == Key.Down)
+            {
+                playerOneKeyInput = Game.KeyInputs.Down;
+                playerOneInputChanged();
+            }
+            //Do the other buttons for when the second player is a human player
+        }
+
+        public void OnKeyUp(object sender, KeyEventArgs e)
+        { //Ensures that input is only gotten when the key is being pressed and doesnt keep inputting after it is let go
+            if (e.Key == Key.Up || e.Key == Key.Down)
+            {
+                playerOneKeyInput = Game.KeyInputs.None;
+                playerOneInputChanged();
+            }
+            //Do other buttons for when second player is a human player
+        }
+
+        void playerOneInputChanged()
+        {
+            playerOne.input = playerOneKeyInput;
+        }
+
         public Game()
         {
-            playerStick = new Stick();
+            playerOne = new HumanStick(500,200);
+            playerTwo = new AIStick(25, 350);
             gameBall = new Ball();
-            board.Children.Add(playerStick.stick);
+
+            board.Children.Add(playerOne.stick);
+            board.Children.Add(playerTwo.stick);
             board.Children.Add(gameBall.ball);
+
             InitializeTimer();
         }
 
-        void CheckForPongHit(Ball ball, Stick stick)
+        bool PlayerOneHasHitBall()
         {
-            if(ball.coordinates.X + ball.width >= stick.coordinates.X && ball.coordinates.Y + ball.height >= stick.coordinates.Y && ball.coordinates.Y < stick.coordinates.Y + stick.height)
-            {//in here I should map where the the ball has hit the stick and accordingly change the deflection angle through the speed
-                ball.xSpeed = ball.xSpeed * -1;
+            if (gameBall.coordinates.X + gameBall.width >= playerOne.coordinates.X && gameBall.coordinates.Y + gameBall.height >= playerOne.coordinates.Y && gameBall.coordinates.Y < playerOne.coordinates.Y + playerOne.height)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool PlayerTwoHasHitBall()
+        {
+            if (gameBall.coordinates.X <= playerTwo.coordinates.X + playerTwo.width && gameBall.coordinates.Y + gameBall.height >= playerTwo.coordinates.Y && gameBall.coordinates.Y < playerTwo.coordinates.Y + playerTwo.height)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool PlayerHasHitBall()
+        {
+            if (PlayerOneHasHitBall() || PlayerTwoHasHitBall())
+            {
+                return true;
+            }
+            return false;
+        }
+
+
+        bool BallHasHitCanvas()
+        {
+            double maxHeight = board.ActualHeight;
+            if (gameBall.coordinates.Y < 0 || gameBall.coordinates.Y + gameBall.height > maxHeight)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool StickHasHitTop()
+        {
+            if (playerOne.coordinates.Y < 0)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool StickHasHitBottom()
+        {
+            double maxHeight = board.ActualHeight;
+            if (playerOne.coordinates.Y + playerOne.height > maxHeight)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        void HandleCollisions()
+        {
+            if (PlayerHasHitBall())
+            {
+                gameBall.BounceOffHit(true);
+                if (PlayerOneHasHitBall())
+                {
+                    playerTwo.targetY = FindYIntersection();
+                }
+            }
+
+            if (BallHasHitCanvas())
+            {
+                gameBall.BounceOffHit(false);
+            }
+
+            if (StickHasHitTop())
+            {
+                playerOne.coordinates.Y = 0;
+            }
+            else if (StickHasHitBottom())
+            {
+                playerOne.coordinates.Y = board.ActualHeight - playerOne.height;
             }
         }
 
-        void CheckForCollision()
-        {//I should move all collision checks even stick and canvas collision here. each class should just handle itself and not have to checkj if it hit another class
+        double FindYIntersection()
+        {
+            //Find the y at which the ball x will intersect the pong x
+            //Do math to add xSpeed to x until x == stick.x , I will have to take into account the ball hitting the canvas and bouncing
+            Double targetX = playerTwo.coordinates.X;
+            double x = gameBall.coordinates.X;
+            double y = gameBall.coordinates.Y;
+            double xSpeed = gameBall.xSpeed;
+            double ySpeed = gameBall.ySpeed;
 
-            //Check if the ball has collided with a stick and if so call a function on it or maybe raise an event for it IDK
-            CheckForPongHit(gameBall, playerStick);
-
-            //Checks playerStick-CanvasCollision
+            while(x > targetX)
             {
-                if (playerStick.coordinates.Y < 0)
+                x += xSpeed;
+                y += ySpeed;
+                if (y <= 0 || y >= board.ActualHeight)
                 {
-                    playerStick.coordinates.Y = 0;
-                }
-
-                double maxHeight = board.ActualHeight;
-                if (playerStick.coordinates.Y + playerStick.height > maxHeight)
-                {
-                    playerStick.coordinates.Y = maxHeight - playerStick.height;
+                    ySpeed = ySpeed * -1;
                 }
             }
+            return y;          
         }
 
         void Update()
         {
-            playerStick.Update(pressedKey);
+            playerOne.Update();
+            playerTwo.Update();
             gameBall.Update();
-            CheckForCollision();
+            HandleCollisions();
         }
 
         void Draw()
         {
-            playerStick.Draw();
+            playerOne.Draw();
+            playerTwo.Draw();
             gameBall.Draw();
         }
-
     }
 
     public abstract class GameShape
     {
-        public Point coordinates;
-        public int height;
-        public int width;
+        //private Point coordinates; //I dont think you can force a subclass to inherit or implement a certain field I would have to pass on a method or constructor that needs that field or maybe just a parameter
 
-        //abstract public void Update(); // I should figure out a way to make the sick update not take in a parameter to help with implementing bette OOP functionality
-        abstract public void Draw();
+        public abstract void Update();
+        public abstract void Draw();
+        //{
+        //    Canvas.SetLeft(stick, coordinates.X);
+        //    Canvas.SetTop(stick, coordinates.Y);
+        //}
     }
 
-    public class Stick : GameShape
-    {
-        enum ControlType
-        {
-            Human,
-            AI
-        }
-
-        public Point coordinates; //May want to use my own x and Y as I dont want the x value to be changed after it is set
+    public abstract class Stick : GameShape
+    {//Everything from GameShape is automatically passed in although it is not mentioned. Any subclasses must still implement them
+        protected const int movementSpeed = 5;
         public readonly int height = 75;
         public readonly int width = 10;
-        //int y;
-        //public int x;
+
+        protected abstract void MoveStick();
+
+        public override void Update()
+        {
+            MoveStick();
+        }
+    }
+
+    public class HumanStick : Stick
+    {
+        public Point coordinates; //May want to use my own x and Y as I dont want the x value to be changed after it is set
         public Rectangle stick = new Rectangle();
+        public Game.KeyInputs input;
 
-        public Stick()
-        {//Make this take into account the ControlType of the new stick as this only works for the one placed on the right which is the player controlled one
-         //Also the actual width and height property on canvas are not initialized until after I initialize my game class and thus cannot be used in setting coord. so i use vals
-            coordinates.X = 500;
-            coordinates.Y = 200;
-
-            Canvas.SetLeft(stick, coordinates.X);
-            Canvas.SetTop(stick, coordinates.Y);
-
+        public HumanStick(int x, int y)
+        {
+            coordinates.X = x;
+            coordinates.Y = y;
             stick.Height = height;
             stick.Width = width;
             stick.Fill = Brushes.Black;
         }
 
-        public void MoveStick(Game.KeyInputs key)
+        protected override void MoveStick()
         {
-            if (key == Game.KeyInputs.Up)
+                if (input == Game.KeyInputs.Up)
+                {
+                    coordinates.Y -= 5;
+                }
+                else if (input == Game.KeyInputs.Down)
+                {
+                    coordinates.Y += 5;
+                }
+        }
+
+        //public override void Update()
+        //{
+        //    MoveStick();
+        //}
+    
+        public override void Draw()
+        {
+            Canvas.SetLeft(stick, coordinates.X);
+            Canvas.SetTop(stick, coordinates.Y);
+        }
+    }
+
+    public class AIStick : Stick
+    {
+        public Point coordinates; //May want to use my own x and Y as I dont want the x value to be changed after it is set
+        public Rectangle stick = new Rectangle();
+        public double? targetY;
+
+        public AIStick(int x, int y)
+        {
+            coordinates.X = x;
+            coordinates.Y = y;
+            stick.Height = height;
+            stick.Width = width;
+            stick.Fill = Brushes.Black;
+        }
+
+        protected override void MoveStick()
+        {
+            if(targetY != null)
             {
-                coordinates.Y -= 5;
-            }
-            if (key == Game.KeyInputs.Down)
-            {
-                coordinates.Y += 5;
+                if (coordinates.Y + height < targetY)
+                {
+                    coordinates.Y += movementSpeed;
+                }
+                else if (coordinates.Y > targetY)
+                {
+                    coordinates.Y -= movementSpeed;
+                }
             }
         }
 
-        public void Update(Game.KeyInputs key)
-        {
-            MoveStick(key);
-        }
+        //public override void Update()
+        //{
+        //    MoveStick();
+        //}
 
         public override void Draw()
         {
@@ -200,7 +340,7 @@ namespace Pong
         public Point coordinates;
         public Ellipse ball;
         public int xSpeed = 5;
-        public int ySpeed = 0;
+        public int ySpeed = 2;
         public readonly int height = 25;
         public readonly int width = 25;
 
@@ -215,13 +355,26 @@ namespace Pong
             coordinates.Y = 200;
         }
 
+        public void BounceOffHit(bool hasHitAStick)
+        {
+            if(hasHitAStick == true)
+            {
+                xSpeed = xSpeed * -1;
+                xSpeed = (xSpeed >= 0) ? xSpeed + 1 : xSpeed - 1;// I need to make this more dynamic and change y speed as well
+            }
+            else
+            {
+                ySpeed = ySpeed * -1;
+            }
+        }
+
         void MoveBall()
         {
             coordinates.X += xSpeed;
             coordinates.Y += ySpeed;
         }
 
-        public void Update()
+        public override void Update()
         {
             MoveBall();
         }
