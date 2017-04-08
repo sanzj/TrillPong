@@ -42,12 +42,18 @@ namespace Pong
             Up,
             Down
         }
-        public KeyInputs playerOneKeyInput;
-        public KeyInputs playerTwoKeyInput;
         public Canvas board = new Canvas();
         HumanStick playerOne; //On Right side
         AIStick playerTwo; //On Left Side
         Ball gameBall;
+
+        Label playerOneLabel;
+        Label playerTwoLabel;
+        int playerOneScore;
+        int playerTwoScore;
+
+        public KeyInputs playerOneKeyInput;
+        public KeyInputs playerTwoKeyInput;
 
         System.Windows.Threading.DispatcherTimer frameTimer = new System.Windows.Threading.DispatcherTimer();
 
@@ -94,22 +100,48 @@ namespace Pong
             playerOne.input = playerOneKeyInput;
         }
 
+        void InitializeScoreTable()
+        {
+            playerOneLabel = new Label();
+            playerTwoLabel = new Label();
+            Canvas.SetLeft(playerOneLabel, 300);
+            Canvas.SetLeft(playerTwoLabel, 250);
+            board.Children.Add(playerOneLabel);
+            board.Children.Add(playerTwoLabel);
+            UpdateScore();
+        }
+
+        void ServeBall()
+        {
+            board.Children.Remove(gameBall.myShape);
+            gameBall = new Ball();
+            board.Children.Add(gameBall.myShape);
+        }
+
+        void UpdateScore()
+        {
+            playerOneLabel.Content = playerOneScore;
+            playerTwoLabel.Content = playerTwoScore;
+        }
+
         public Game()
         {
             playerOne = new HumanStick(500,200);
             playerTwo = new AIStick(25, 350);
             gameBall = new Ball();
 
-            board.Children.Add(playerOne.stick);
-            board.Children.Add(playerTwo.stick);
-            board.Children.Add(gameBall.ball);
+            board.Children.Add(playerOne.myShape);
+            board.Children.Add(playerTwo.myShape);
+            board.Children.Add(gameBall.myShape);
+
+            InitializeScoreTable();
 
             InitializeTimer();
         }
 
         bool PlayerOneHasHitBall()
-        {
-            if (gameBall.coordinates.X + gameBall.width >= playerOne.coordinates.X && gameBall.coordinates.Y + gameBall.height >= playerOne.coordinates.Y && gameBall.coordinates.Y < playerOne.coordinates.Y + playerOne.height)
+        {//                                   Gameball right is greater than the left side of stick but less than right side of the stick and gameball
+            if (gameBall.coordinates.X + gameBall.width >= playerOne.coordinates.X && gameBall.coordinates.X <= playerOne.coordinates.X + playerOne.width && gameBall.coordinates.Y + gameBall.height >= playerOne.coordinates.Y && gameBall.coordinates.Y <= playerOne.coordinates.Y + playerOne.height)
             {
                 return true;
             }
@@ -118,7 +150,7 @@ namespace Pong
 
         bool PlayerTwoHasHitBall()
         {
-            if (gameBall.coordinates.X <= playerTwo.coordinates.X + playerTwo.width && gameBall.coordinates.Y + gameBall.height >= playerTwo.coordinates.Y && gameBall.coordinates.Y < playerTwo.coordinates.Y + playerTwo.height)
+            if (gameBall.coordinates.X + gameBall.width >= playerTwo.coordinates.X && gameBall.coordinates.X <= playerTwo.coordinates.X + playerTwo.width && gameBall.coordinates.Y + gameBall.height >= playerTwo.coordinates.Y && gameBall.coordinates.Y <= playerTwo.coordinates.Y + playerTwo.height)
             {
                 return true;
             }
@@ -134,8 +166,25 @@ namespace Pong
             return false;
         }
 
+        bool PlayerOneHasScored()
+        {
+            if(gameBall.coordinates.X <= 0)
+            {
+                return true;
+            }
+            return false;
+        }
 
-        bool BallHasHitCanvas()
+        bool PlayerTwoHasScored()
+        {
+            if(gameBall.coordinates.X >= board.ActualWidth)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool BallHasHitTopOrBottom()
         {
             double maxHeight = board.ActualHeight;
             if (gameBall.coordinates.Y < 0 || gameBall.coordinates.Y + gameBall.height > maxHeight)
@@ -171,11 +220,12 @@ namespace Pong
                 gameBall.BounceOffHit(true);
                 if (PlayerOneHasHitBall())
                 {
+                    gameBall.coordinates.X = playerOne.coordinates.X - gameBall.width;
                     playerTwo.targetY = FindYIntersection();
                 }
             }
 
-            if (BallHasHitCanvas())
+            if (BallHasHitTopOrBottom())
             {
                 gameBall.BounceOffHit(false);
             }
@@ -188,12 +238,24 @@ namespace Pong
             {
                 playerOne.coordinates.Y = board.ActualHeight - playerOne.height;
             }
+
+            if (PlayerOneHasScored())
+            {
+                playerOneScore++;
+                UpdateScore();
+                ServeBall();
+            }
+            else if (PlayerTwoHasScored())
+            {
+                playerTwoScore++;
+                UpdateScore();
+                ServeBall();
+            }
         }
 
         double FindYIntersection()
         {
-            //Find the y at which the ball x will intersect the pong x
-            //Do math to add xSpeed to x until x == stick.x , I will have to take into account the ball hitting the canvas and bouncing
+            //Currently does not take into account the speed change on a hit in ball. I could maybe use the same random seed as in ball or not IDk. Either its off sometimes rn
             Double targetX = playerTwo.coordinates.X;
             double x = gameBall.coordinates.X;
             double y = gameBall.coordinates.Y;
@@ -230,46 +292,50 @@ namespace Pong
 
     public abstract class GameShape
     {
-        //private Point coordinates; //I dont think you can force a subclass to inherit or implement a certain field I would have to pass on a method or constructor that needs that field or maybe just a parameter
+        public Point coordinates;// May want to use my onw xand y coordinates. Also may want to turn my fields into properties
+        public Shape myShape;
 
-        public abstract void Update();
-        public abstract void Draw();
+        //protected GameShape(int x, int y)
         //{
-        //    Canvas.SetLeft(stick, coordinates.X);
-        //    Canvas.SetTop(stick, coordinates.Y);
+        //    //Make a constructor that can be used in children and specialized in base children classes
         //}
-    }
+
+        protected abstract void MoveCoordinates();
+
+        public virtual void Update()
+        {
+            MoveCoordinates();
+        }
+
+        public virtual void Draw()
+        {
+            Canvas.SetLeft(myShape, coordinates.X);
+            Canvas.SetTop(myShape, coordinates.Y);
+        }
+}
 
     public abstract class Stick : GameShape
-    {//Everything from GameShape is automatically passed in although it is not mentioned. Any subclasses must still implement them
+    {//Everything from GameShape is automatically passed in although it is not mentioned. All subclasses must still implement them
         protected const int movementSpeed = 5;
         public readonly int height = 75;
         public readonly int width = 10;
-
-        protected abstract void MoveStick();
-
-        public override void Update()
-        {
-            MoveStick();
-        }
     }
 
     public class HumanStick : Stick
     {
-        public Point coordinates; //May want to use my own x and Y as I dont want the x value to be changed after it is set
-        public Rectangle stick = new Rectangle();
         public Game.KeyInputs input;
 
         public HumanStick(int x, int y)
         {
+            myShape = new Rectangle();
             coordinates.X = x;
             coordinates.Y = y;
-            stick.Height = height;
-            stick.Width = width;
-            stick.Fill = Brushes.Black;
+            myShape.Height = height;
+            myShape.Width = width;
+            myShape.Fill = Brushes.Black;
         }
 
-        protected override void MoveStick()
+        protected override void MoveCoordinates()
         {
                 if (input == Game.KeyInputs.Up)
                 {
@@ -280,35 +346,23 @@ namespace Pong
                     coordinates.Y += 5;
                 }
         }
-
-        //public override void Update()
-        //{
-        //    MoveStick();
-        //}
-    
-        public override void Draw()
-        {
-            Canvas.SetLeft(stick, coordinates.X);
-            Canvas.SetTop(stick, coordinates.Y);
-        }
     }
 
     public class AIStick : Stick
     {
-        public Point coordinates; //May want to use my own x and Y as I dont want the x value to be changed after it is set
-        public Rectangle stick = new Rectangle();
         public double? targetY;
 
         public AIStick(int x, int y)
         {
+            myShape = new Rectangle();
             coordinates.X = x;
             coordinates.Y = y;
-            stick.Height = height;
-            stick.Width = width;
-            stick.Fill = Brushes.Black;
+            myShape.Height = height;
+            myShape.Width = width;
+            myShape.Fill = Brushes.Black;
         }
 
-        protected override void MoveStick()
+        protected override void MoveCoordinates()
         {
             if(targetY != null)
             {
@@ -322,34 +376,21 @@ namespace Pong
                 }
             }
         }
-
-        //public override void Update()
-        //{
-        //    MoveStick();
-        //}
-
-        public override void Draw()
-        {
-            Canvas.SetLeft(stick, coordinates.X);
-            Canvas.SetTop(stick, coordinates.Y);
-        }
     }
 
     public class Ball : GameShape
     {
-        public Point coordinates;
-        public Ellipse ball;
-        public int xSpeed = 5;
-        public int ySpeed = 2;
         public readonly int height = 25;
         public readonly int width = 25;
+        public int xSpeed = 5;
+        public int ySpeed = 2;
 
         public Ball()
         {
-            ball = new Ellipse();
-            ball.Height = height;
-            ball.Width = width;
-            ball.Fill = Brushes.Crimson;
+            myShape = new Ellipse();
+            myShape.Height = height;
+            myShape.Width = width;
+            myShape.Fill = Brushes.Crimson;
 
             coordinates.X = 200;
             coordinates.Y = 200;
@@ -359,8 +400,11 @@ namespace Pong
         {
             if(hasHitAStick == true)
             {
+                Random rand = new Random(); //I may want to implement a different algorithm that used doubles for speed to allow more flexibility
+
                 xSpeed = xSpeed * -1;
-                xSpeed = (xSpeed >= 0) ? xSpeed + 1 : xSpeed - 1;// I need to make this more dynamic and change y speed as well
+                xSpeed = (xSpeed >= 0) ? xSpeed + rand.Next(0,2): xSpeed - rand.Next(0,2);
+                ySpeed = (ySpeed >= 0) ? ySpeed + rand.Next(-1, 2) : ySpeed - rand.Next(-1, 2);
             }
             else
             {
@@ -368,21 +412,10 @@ namespace Pong
             }
         }
 
-        void MoveBall()
+        protected override void MoveCoordinates()
         {
             coordinates.X += xSpeed;
             coordinates.Y += ySpeed;
-        }
-
-        public override void Update()
-        {
-            MoveBall();
-        }
-
-        public override void Draw()
-        {
-            Canvas.SetLeft(ball, coordinates.X);
-            Canvas.SetTop(ball, coordinates.Y);
         }
     }
 }
