@@ -20,89 +20,441 @@ namespace Pong
     /// </summary>
     public partial class MainWindow : Window
     {
-        /*
-        The game is coded using a state manager with 3 game states. 
-        The Manager class simply switches the UI for the current state, the states are the ones that call the switch method though
-        The states all have their own UI's, logic, and input handling that they take care of themselves. 
-        They also take care of leaving to a different state by calling a manager class
-        The manager has a board which is sort of overtaken by the respective current state when the state is changed, this is how the UI is changed and controlled by the states
-        */
-        //Game myGame = new Game();
-        Manager manager = new Manager();
+        Game myGame = new Game();
 
         public MainWindow()
         {
             InitializeComponent();
-            this.DataContext = manager;
-            MainGrid.Children.Add(manager.board);
-        }
+            this.DataContext = myGame;
 
-        public void SubscribeToKeyDown(KeyEventHandler myEventHandler)
-        {
-            KeyDown += myEventHandler;
-        }
-        
-        public void SubscribeToKeyUp(KeyEventHandler myEventHandler)
-        {
-            KeyUp += myEventHandler;
+            MainGrid.Children.Add(myGame.board);
+
+            KeyDown += myGame.OnKeyPressed;
+            KeyUp += myGame.OnKeyUp;
         }
     }
 
-    public class Manager
-    {
-        public enum State
+    public class Game
+    { // A better way to handle this would be a class that does all the menu and game instantiating and the game instances ,ie most of this, would be their own class, one for Ai and one for human player then I would call the correct class dependent on the options chosen in the main class. This would fix my having to use a dynamic object
+        enum GameState
         {
-            Menu,
             Play,
+            Menu,
             GameOver
         }
 
-        public enum Opponent
+        public enum KeyInputs
         {
-            AI,
-            Human
+            None,
+            Up,
+            Down
         }
 
-        State currentState;// May not be needed
-        public Opponent opponentSetting;
+        enum OponentSetting
+        {
+            VersusAI,
+            VersusHuman
+        }
 
         public Canvas board = new Canvas();
+        GameState currentState = GameState.Menu;
 
-        public Manager()
-        {
-            ChangeState(State.Menu);//Initializes UI in menu mode
-        }
-        //Add method to delete previous state
-        public void ChangeState(State nextState)
-        {
-            currentState = nextState;
+        OponentSetting setting; //Could've used an options class/Struct to hold information but scope rn is small enough for a bool in this class
+        HumanStick playerOne; //On Right side
+        dynamic playerTwo; //On Left Side, using dynamic kinda hurts the strongly typed characteristic of C#, I can breka this easily if I call something Im not supposed to. This means everything I call with this needs to be checked for or ensured It has it in its class
+        Ball gameBall;
 
-            if (nextState == State.Menu)
-            {
-                MenuState menu = new MenuState(this);
-            }
-            else if (nextState == State.Play)
-            {
-                if (opponentSetting == Opponent.AI)
-                {
-                    SinglePlayerPlayState playState = new SinglePlayerPlayState(this);
-                }
-                else if (opponentSetting == Opponent.Human)
-                {
-                    TwoPlayerState playState = new TwoPlayerState(this);
-                }
-            }
-            else if (nextState == State.GameOver)
-            {
-                GameOverState gameOver = new GameOverState(this);
-            }
+        Label playerOneLabel;
+        Label playerTwoLabel;
+        int playerOneScore;
+        int playerTwoScore;
+
+        public KeyInputs playerOneKeyInput;
+        public KeyInputs playerTwoKeyInput;
+
+        System.Windows.Threading.DispatcherTimer frameTimer;
+
+        void InitializeTimer()
+        {
+            frameTimer = new System.Windows.Threading.DispatcherTimer();
+            frameTimer.Interval = new TimeSpan(0, 0, 0, 0, 025);//Creates framespersecond by calling update and draw after ticks. every 25 millisecond is 40fps
+            frameTimer.Tick += FrameTimer_Tick;
+            frameTimer.Start();
         }
 
+        private void FrameTimer_Tick(object sender, EventArgs e)
+        {
+            Update();
+            Draw();
+        }
+
+        public void OnKeyPressed(object sender, KeyEventArgs e)
+        {
+            if(currentState == GameState.Play)
+            {
+                if (e.Key == Key.Up)
+                {
+                    playerOneKeyInput = Game.KeyInputs.Up;
+                    PlayerOneInputChanged();
+                }
+                else if (e.Key == Key.Down)
+                {
+                    playerOneKeyInput = Game.KeyInputs.Down;
+                    PlayerOneInputChanged();
+                }
+
+                if(setting == OponentSetting.VersusHuman)
+                {
+                    if (e.Key == Key.W)
+                    {
+                        playerTwoKeyInput = Game.KeyInputs.Up;
+                        PlayerTwoInputChanged();
+                    }
+                    else if (e.Key == Key.S)
+                    {
+                        playerTwoKeyInput = Game.KeyInputs.Down;
+                        PlayerTwoInputChanged();
+                    }
+                }
+
+            }
+        }
+
+        public void OnKeyUp(object sender, KeyEventArgs e)
+        { //Ensures that input is only gotten when the key is being pressed and doesnt keep inputting after it is let go
+            if(currentState == GameState.Play)
+            {
+                if (e.Key == Key.Up || e.Key == Key.Down)
+                {
+                    playerOneKeyInput = Game.KeyInputs.None;
+                    PlayerOneInputChanged();
+                }
+
+                if(setting == OponentSetting.VersusHuman)
+                {
+                    if (e.Key == Key.W || e.Key == Key.S)
+                    {
+                        playerTwoKeyInput = Game.KeyInputs.None;
+                        PlayerTwoInputChanged();
+                    }
+                }
+            }
+        }
+
+        void PlayerOneInputChanged()
+        {
+            playerOne.input = playerOneKeyInput;
+        }
+
+        void PlayerTwoInputChanged()
+        {
+            playerTwo.input = playerTwoKeyInput;
+        }
+
+        void InitializeScoreTable()
+        {
+            playerOneLabel = new Label();
+            playerTwoLabel = new Label();
+            Canvas.SetLeft(playerOneLabel, 300);
+            Canvas.SetLeft(playerTwoLabel, 250);
+            board.Children.Add(playerOneLabel);
+            board.Children.Add(playerTwoLabel);
+            UpdateScore();
+        }
+
+        void InitializeGameState()
+        {
+            playerOne = new HumanStick(500, 200);
+            gameBall = new Ball();
+
+            if(setting == OponentSetting.VersusAI)
+                playerTwo = new AIStick(25, 350);
+            else
+                playerTwo = new HumanStick(25, 350);
+
+            board.Children.Clear();
+            board.Children.Add(playerOne.myShape);
+            board.Children.Add(playerTwo.myShape);
+            board.Children.Add(gameBall.myShape);
+            InitializeScoreTable();
+        }
+
+        void InitializeMenuState()
+        {
+            //Grid menuGrid = new Grid();
+
+            Button startButton = new Button();
+            startButton.Click += StartButton_Click;
+            startButton.Content = "Start Game";
+            Canvas.SetTop(startButton, 350);
+            Canvas.SetLeft(startButton, 225);
+
+            Button PlayerButton = new Button();
+            PlayerButton.Click += PlayerButton_Click;
+            PlayerButton.Content = "Player";
+            Canvas.SetTop(PlayerButton, 200);
+            Canvas.SetLeft(PlayerButton, 200);
+
+            Button AIButton = new Button();
+            AIButton.Click += AIButton_Click;
+            AIButton.Content = "AI";
+            Canvas.SetTop(AIButton, 200);
+            Canvas.SetLeft(AIButton, 300);
+
+            board.Children.Add(startButton);
+            board.Children.Add(PlayerButton);
+            board.Children.Add(AIButton);     
+        }
+
+        private void AIButton_Click(object sender, RoutedEventArgs e)
+        {
+            setting = OponentSetting.VersusAI;
+        }
+
+        private void PlayerButton_Click(object sender, RoutedEventArgs e)
+        {
+            setting = OponentSetting.VersusHuman;
+        }
+
+        private void StartButton_Click(object sender, RoutedEventArgs e)
+        {
+            currentState = GameState.Play;
+            ChangeState();
+        }
+
+        void ServeBall()
+        {
+            board.Children.Remove(gameBall.myShape);
+            gameBall = new Ball();
+            board.Children.Add(gameBall.myShape);
+        }
+
+        void UpdateScore()
+        {
+            playerOneLabel.Content = playerOneScore;
+            playerTwoLabel.Content = playerTwoScore;
+        }
+
+        public Game()
+        {
+            InitializeTimer();
+        }
+
+        bool PlayerOneHasHitBall()
+        {//                                   Gameball right is greater than the left side of stick but less than right side of the stick and gameball
+            if (gameBall.coordinates.X + gameBall.width >= playerOne.coordinates.X && gameBall.coordinates.X <= playerOne.coordinates.X + playerOne.width && gameBall.coordinates.Y + gameBall.height >= playerOne.coordinates.Y && gameBall.coordinates.Y <= playerOne.coordinates.Y + playerOne.height)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool PlayerTwoHasHitBall()
+        {
+            if (gameBall.coordinates.X + gameBall.width >= playerTwo.coordinates.X && gameBall.coordinates.X <= playerTwo.coordinates.X + playerTwo.width && gameBall.coordinates.Y + gameBall.height >= playerTwo.coordinates.Y && gameBall.coordinates.Y <= playerTwo.coordinates.Y + playerTwo.height)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool PlayerHasHitBall()
+        {
+            if (PlayerOneHasHitBall() || PlayerTwoHasHitBall())
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool PlayerOneHasScored()
+        {
+            if(gameBall.coordinates.X <= 0)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool PlayerTwoHasScored()
+        {
+            if(gameBall.coordinates.X >= board.ActualWidth)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool BallHasHitTopOrBottom()
+        {
+            double maxHeight = board.ActualHeight;
+            if (gameBall.coordinates.Y < 0 || gameBall.coordinates.Y + gameBall.height > maxHeight)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool StickOneHasHitTop()
+        {
+            if (playerOne.coordinates.Y < 0)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool StickOneHasHitBottom()
+        {
+            double maxHeight = board.ActualHeight;
+            if (playerOne.coordinates.Y + playerOne.height > maxHeight)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool StickTwoHasHitTop()
+        {
+            if (playerTwo.coordinates.Y < 0)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        bool StickTwoHasHitBottom()
+        {
+            double maxHeight = board.ActualHeight;
+            if (playerTwo.coordinates.Y + playerTwo.height > maxHeight)
+            {
+                return true;
+            }
+            return false;
+        }
+
+        void HandleCollisions()
+        {
+            if (PlayerOneHasHitBall())
+            {
+                gameBall.BounceOffHit(true);
+                gameBall.coordinates.X = playerOne.coordinates.X - gameBall.width;
+
+                if (setting == OponentSetting.VersusAI)
+                    playerTwo.targetY = FindYIntersection();
+            }
+
+            if (PlayerTwoHasHitBall())
+            {
+                gameBall.BounceOffHit(true);
+                gameBall.coordinates.X = playerTwo.coordinates.X + gameBall.width;
+            }
+
+            if (BallHasHitTopOrBottom())
+            {
+                gameBall.BounceOffHit(false);
+            }
+
+            if (StickOneHasHitTop())
+            {
+                playerOne.coordinates.Y = 0;
+            }
+            else if (StickOneHasHitBottom())
+            {
+                playerOne.coordinates.Y = board.ActualHeight - playerOne.height;
+            }
+            //The Second stick checks are not working it may have something to do with stick two being dynamic IDK tho
+            if (StickTwoHasHitTop())
+            {
+                playerTwo.coordinates.Y = 0;
+            }
+            else if (StickTwoHasHitBottom())
+            {
+                playerTwo.coordinates.Y = board.ActualHeight - playerTwo.height;
+            }
+
+            if (PlayerOneHasScored())
+            {
+                playerOneScore++;
+                UpdateScore();
+                ServeBall();
+            }
+            else if (PlayerTwoHasScored())
+            {
+                playerTwoScore++;
+                UpdateScore();
+                ServeBall();
+            }
+        }
+
+        double FindYIntersection()
+        {//Currently does not take into account the speed change on a hit in ball. I could maybe use the same random seed as in ball or not IDk. Either its off sometimes rn
+            Double targetX = playerTwo.coordinates.X;
+            double x = gameBall.coordinates.X;
+            double y = gameBall.coordinates.Y;
+            double xSpeed = gameBall.xSpeed;
+            double ySpeed = gameBall.ySpeed;
+
+            while(x > targetX)
+            {
+                x += xSpeed;
+                y += ySpeed;
+                if (y <= 0 || y >= board.ActualHeight)
+                {
+                    ySpeed = ySpeed * -1;
+                }
+            }
+            return y;          
+        }
+
+        void Update()
+        {
+            if(currentState == GameState.Play)
+            {
+                playerOne.Update();
+                playerTwo.Update();
+                gameBall.Update();
+                HandleCollisions();
+            }
+        }
+
+        void ChangeState()
+        {
+            if (currentState == GameState.Play)
+            {
+                frameTimer.Start(); //This seems to not be encessary. Odd
+                InitializeGameState();
+            }               
+            else if (currentState == GameState.Menu)
+            {
+                frameTimer.Stop();
+                InitializeMenuState();
+            }                
+            else if (currentState == GameState.GameOver)
+                throw new NotImplementedException();
+        }
+
+        void DrawMenu()
+        {
+                InitializeMenuState();
+        }
+
+        void Draw()
+        {
+            if (currentState == GameState.Play)
+            {
+                playerOne.Draw();
+                playerTwo.Draw();
+                gameBall.Draw();
+            }
+            else if (currentState == GameState.Menu)
+                DrawMenu();
+        }
     }
 
     public abstract class GameShape
     {
-        public Point coordinates;// May want to use my onw xand y coordinates. Also may want to turn my fields into properties. Using a struct may inadvertentl cause boxing and unboxing issues
+        public Point coordinates;// May want to use my onw xand y coordinates. Also may want to turn my fields into properties
         public Shape myShape;
         public readonly int height;
         public readonly int width;
@@ -125,7 +477,7 @@ namespace Pong
             Canvas.SetLeft(myShape, coordinates.X);
             Canvas.SetTop(myShape, coordinates.Y);
         }
-    }
+}
 
     public abstract class Stick : GameShape
     {//Everything from GameShape is automatically passed in although it is not mentioned. All subclasses must still implement them
@@ -149,20 +501,20 @@ namespace Pong
 
     public class HumanStick : Stick
     {
-        public PlayState.KeyInputs input;
+        public Game.KeyInputs input;
 
         public HumanStick(int x, int y) : base(x, y) { }
 
         protected override void MoveCoordinates()
         {
-            if (input == PlayState.KeyInputs.Up)
-            {
-                coordinates.Y -= 5;
-            }
-            else if (input == PlayState.KeyInputs.Down)
-            {
-                coordinates.Y += 5;
-            }
+                if (input == Game.KeyInputs.Up)
+                {
+                    coordinates.Y -= 5;
+                }
+                else if (input == Game.KeyInputs.Down)
+                {
+                    coordinates.Y += 5;
+                }
         }
     }
 
@@ -174,7 +526,7 @@ namespace Pong
 
         protected override void MoveCoordinates()
         {
-            if (targetY != null)
+            if(targetY != null)
             {
                 if (coordinates.Y + height < targetY)
                 {
@@ -193,7 +545,7 @@ namespace Pong
         public int xSpeed = 5;
         public int ySpeed = 2;
 
-        public Ball() : base(25, 25)
+        public Ball() : base (25, 25)
         {
             myShape = new Ellipse();
             myShape.Height = height;
@@ -206,12 +558,12 @@ namespace Pong
 
         public void BounceOffHit(bool hasHitAStick)
         {
-            if (hasHitAStick == true)
+            if(hasHitAStick == true)
             {
                 Random rand = new Random(); //I may want to implement a different algorithm that used doubles for speed to allow more flexibility
 
                 xSpeed = xSpeed * -1;
-                xSpeed = (xSpeed >= 0) ? xSpeed + rand.Next(0, 2) : xSpeed - rand.Next(0, 2);
+                xSpeed = (xSpeed >= 0) ? xSpeed + rand.Next(0,2): xSpeed - rand.Next(0,2);
                 ySpeed = (ySpeed >= 0) ? ySpeed + rand.Next(-1, 2) : ySpeed - rand.Next(-1, 2);
             }
             else
