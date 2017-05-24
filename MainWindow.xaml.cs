@@ -28,8 +28,9 @@ namespace Pong
         The manager has a board which is sort of overtaken by the respective current state when the state is changed, this is how the UI is changed and controlled by the states
 
         One thing I should've done and could do in refactoring is implement a factory class that returns the correct state class.
+
+        Have to add the game logo as well as improve the hitting mechanics. I guess I can also add a tune to play while the game is in session.
         */
-        //Game myGame = new Game();
         Manager manager = new Manager();
 
         public MainWindow()
@@ -224,7 +225,7 @@ namespace Pong
             myShape.Fill = (Brush)(new BrushConverter().ConvertFrom("#FFD900"));
 
             Random rand = new Random();
-            do// make sure that ySpeed is always moving at a speed of at least 5 in either direction
+            do// make sure that ySpeed is always moving at a speed of at least 5 in either direction when spawned
             {
                 ySpeed = rand.Next(-7, 7);
             } while (ySpeed < 3 && ySpeed > -3);
