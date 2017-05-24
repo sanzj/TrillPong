@@ -26,6 +26,8 @@ namespace Pong
         The states all have their own UI's, logic, and input handling that they take care of themselves. 
         They also take care of leaving to a different state by calling a manager class
         The manager has a board which is sort of overtaken by the respective current state when the state is changed, this is how the UI is changed and controlled by the states
+
+        One thing I should've done and could do in refactoring is implement a factory class that returns the correct state class.
         */
         //Game myGame = new Game();
         Manager manager = new Manager();
@@ -45,6 +47,16 @@ namespace Pong
         public void SubscribeToKeyUp(KeyEventHandler myEventHandler)
         {
             KeyUp += myEventHandler;
+        }
+
+        public void UnSubscribeToKeyDown(KeyEventHandler myEventHandler)
+        {
+            KeyDown -= myEventHandler;
+        }
+
+        public void UnSubscribeToKeyUp(KeyEventHandler myEventHandler)
+        {
+            KeyUp -= myEventHandler;
         }
     }
 
@@ -102,7 +114,9 @@ namespace Pong
 
     public abstract class GameShape
     {
-        public Point coordinates;// May want to use my onw xand y coordinates. Also may want to turn my fields into properties. Using a struct may inadvertentl cause boxing and unboxing issues
+        //public Point coordinates;// May want to use my onw xand y coordinates. Also may want to turn my fields into properties. Using a struct may inadvertentl cause boxing and unboxing issues
+        public double x;
+        public double y;
         public Shape myShape;
         public readonly int height;
         public readonly int width;
@@ -122,8 +136,8 @@ namespace Pong
 
         public virtual void Draw()
         {
-            Canvas.SetLeft(myShape, coordinates.X);
-            Canvas.SetTop(myShape, coordinates.Y);
+            Canvas.SetLeft(myShape, x);
+            Canvas.SetTop(myShape, y);
         }
     }
 
@@ -142,8 +156,8 @@ namespace Pong
 
         void Initialize(int xCoord, int yCoord)
         {
-            coordinates.X = xCoord;
-            coordinates.Y = yCoord;
+            x = xCoord;
+            y = yCoord;
         }
     }
 
@@ -157,11 +171,11 @@ namespace Pong
         {
             if (input == PlayState.KeyInputs.Up)
             {
-                coordinates.Y -= 5;
+                y -= 5;
             }
             else if (input == PlayState.KeyInputs.Down)
             {
-                coordinates.Y += 5;
+                y += 5;
             }
         }
     }
@@ -176,13 +190,13 @@ namespace Pong
         {
             if (targetY != null)
             {
-                if (coordinates.Y + height < targetY)
+                if (y + height < targetY)
                 {
-                    coordinates.Y += movementSpeed;
+                    y += movementSpeed;
                 }
-                else if (coordinates.Y > targetY)
+                else if (y > targetY)
                 {
-                    coordinates.Y -= movementSpeed;
+                    y -= movementSpeed;
                 }
             }
         }
@@ -200,8 +214,8 @@ namespace Pong
             myShape.Width = width;
             myShape.Fill = Brushes.Crimson;
 
-            coordinates.X = 200;
-            coordinates.Y = 200;
+            x = 200;
+            y = 200;
         }
 
         public void BounceOffHit(bool hasHitAStick)
@@ -222,8 +236,8 @@ namespace Pong
 
         protected override void MoveCoordinates()
         {
-            coordinates.X += xSpeed;
-            coordinates.Y += ySpeed;
+            x += xSpeed;
+            y += ySpeed;
         }
     }
 }

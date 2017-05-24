@@ -201,6 +201,13 @@ namespace Pong
             wnd.SubscribeToKeyUp(OnKeyUp);
         }
 
+        public void UnsubscribeKeyEventHandlers()
+        {
+            MainWindow wnd = (MainWindow)Application.Current.MainWindow;
+            wnd.UnSubscribeToKeyDown(OnKeyPressed);
+            wnd.UnSubscribeToKeyUp(OnKeyUp);
+        }
+
         public virtual void OnKeyPressed(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Up)
@@ -231,7 +238,7 @@ namespace Pong
 
         protected bool PlayerOneHasHitBall()
         {//                                   Gameball right is greater than the left side of stick but less than right side of the stick and gameball
-            if (gameBall.coordinates.X + gameBall.width >= playerOne.coordinates.X && gameBall.coordinates.X <= playerOne.coordinates.X + playerOne.width && gameBall.coordinates.Y + gameBall.height >= playerOne.coordinates.Y && gameBall.coordinates.Y <= playerOne.coordinates.Y + playerOne.height)
+            if (gameBall.x + gameBall.width >= playerOne.x && gameBall.x <= playerOne.x + playerOne.width && gameBall.y + gameBall.height >= playerOne.y && gameBall.y <= playerOne.y + playerOne.height)
             {
                 return true;
             }
@@ -240,7 +247,7 @@ namespace Pong
 
         protected bool PlayerTwoHasHitBall()
         {
-            if (gameBall.coordinates.X + gameBall.width >= playerTwo.coordinates.X && gameBall.coordinates.X <= playerTwo.coordinates.X + playerTwo.width && gameBall.coordinates.Y + gameBall.height >= playerTwo.coordinates.Y && gameBall.coordinates.Y <= playerTwo.coordinates.Y + playerTwo.height)
+            if (gameBall.x + gameBall.width >= playerTwo.x && gameBall.x <= playerTwo.x + playerTwo.width && gameBall.y + gameBall.height >= playerTwo.y && gameBall.y <= playerTwo.y + playerTwo.height)
             {
                 return true;
             }
@@ -249,7 +256,7 @@ namespace Pong
 
         protected bool PlayerOneHasScored()
         {
-            if (gameBall.coordinates.X <= 0)
+            if (gameBall.x <= 0)
             {
                 return true;
             }
@@ -258,7 +265,7 @@ namespace Pong
 
         protected bool PlayerTwoHasScored()
         {
-            if (gameBall.coordinates.X >= board.ActualWidth)
+            if (gameBall.x >= board.ActualWidth)
             {
                 return true;
             }
@@ -268,7 +275,7 @@ namespace Pong
         protected bool BallHasHitTopOrBottom()
         {
             double maxHeight = board.ActualHeight;
-            if (gameBall.coordinates.Y < 0 || gameBall.coordinates.Y + gameBall.height > maxHeight)
+            if (gameBall.y < 0 || gameBall.y + gameBall.height > maxHeight)
             {
                 return true;
             }
@@ -277,7 +284,7 @@ namespace Pong
 
         protected bool StickOneHasHitTop()
         {
-            if (playerOne.coordinates.Y < 0)
+            if (playerOne.y < 0)
             {
                 return true;
             }
@@ -287,7 +294,7 @@ namespace Pong
         protected bool StickOneHasHitBottom()
         {
             double maxHeight = board.ActualHeight;
-            if (playerOne.coordinates.Y + playerOne.height > maxHeight)
+            if (playerOne.y + playerOne.height > maxHeight)
             {
                 return true;
             }
@@ -296,7 +303,7 @@ namespace Pong
 
         protected bool StickTwoHasHitTop()
         {
-            if (playerTwo.coordinates.Y < 0)
+            if (playerTwo.y < 0)
             {
                 return true; // This part works correctly
             }
@@ -306,7 +313,7 @@ namespace Pong
         protected bool StickTwoHasHitBottom()
         {
             double maxHeight = board.ActualHeight;
-            if (playerTwo.coordinates.Y + playerTwo.height > maxHeight)
+            if (playerTwo.y + playerTwo.height > maxHeight)
             {
                 return true;
             }
@@ -326,13 +333,13 @@ namespace Pong
             if (PlayerOneHasHitBall())
             {
                 gameBall.BounceOffHit(true);
-                gameBall.coordinates.X = playerOne.coordinates.X - gameBall.width;
+                gameBall.x = playerOne.x - gameBall.width;
             }
 
             if (PlayerTwoHasHitBall())
             {
                 gameBall.BounceOffHit(true);
-                gameBall.coordinates.X = playerTwo.coordinates.X + gameBall.width;
+                gameBall.x = playerTwo.x + gameBall.width;
             }
 
             if (BallHasHitTopOrBottom())
@@ -342,20 +349,20 @@ namespace Pong
 
             if (StickOneHasHitTop())
             {
-                playerOne.coordinates.Y = 0;
+                playerOne.y = 0;
             }
             else if (StickOneHasHitBottom())
             {
-                playerOne.coordinates.Y = board.ActualHeight - playerOne.height;
+                playerOne.y = board.ActualHeight - playerOne.height;
             }
             //The Second stick checks are not working it may have something to do with stick two being dynamic IDK tho
             if (StickTwoHasHitTop())
             {
-                playerTwo.coordinates.Y = 0; // This line is performed but the value does not change
+                playerTwo.y = 0; // This line is performed but the value does not change
             }
             else if (StickTwoHasHitBottom())
             {
-                playerTwo.coordinates.Y = board.ActualHeight - playerTwo.height;
+                playerTwo.y = board.ActualHeight - playerTwo.height;
             }
 
             if (PlayerOneHasScored())
@@ -381,6 +388,8 @@ namespace Pong
 
             if (GameHasBeenWon())
             {
+                UnsubscribeKeyEventHandlers(); //These two first methods are called to ensure that the state class doesnt run while in another state. Hopefully causes disposal 
+                frameTimer.Stop();
                 myManager.ChangeState(Manager.State.GameOver);
             }
         }
@@ -405,9 +414,9 @@ namespace Pong
 
         double FindYIntersection()
         {//Currently does not take into account the speed change on a hit in ball. I could maybe use the same random seed as in ball or not IDk. Either its off sometimes rn
-            Double targetX = playerTwo.coordinates.X;
-            double x = gameBall.coordinates.X;
-            double y = gameBall.coordinates.Y;
+            Double targetX = playerTwo.x;
+            double x = gameBall.x;
+            double y = gameBall.y;
             double xSpeed = gameBall.xSpeed;
             double ySpeed = gameBall.ySpeed;
 
@@ -428,7 +437,7 @@ namespace Pong
             if (PlayerOneHasHitBall())
             {
                 gameBall.BounceOffHit(true);
-                gameBall.coordinates.X = playerOne.coordinates.X - gameBall.width;
+                gameBall.x = playerOne.x - gameBall.width;
 
                 playerTwo.targetY = FindYIntersection();
             }
@@ -436,7 +445,7 @@ namespace Pong
             if (PlayerTwoHasHitBall())
             {
                 gameBall.BounceOffHit(true);
-                gameBall.coordinates.X = playerTwo.coordinates.X + gameBall.width;
+                gameBall.x = playerTwo.x + gameBall.width;
             }
 
             if (BallHasHitTopOrBottom())
@@ -446,20 +455,20 @@ namespace Pong
 
             if (StickOneHasHitTop())
             {
-                playerOne.coordinates.Y = 0;
+                playerOne.y = 0;
             }
             else if (StickOneHasHitBottom())
             {
-                playerOne.coordinates.Y = board.ActualHeight - playerOne.height;
+                playerOne.y = board.ActualHeight - playerOne.height;
             }
             //The Second stick checks are not working it may have something to do with stick two being dynamic IDK tho
             if (StickTwoHasHitTop())
             {
-                playerTwo.coordinates.Y = 0;
+                playerTwo.y = 0;
             }
             else if (StickTwoHasHitBottom())
             {
-                playerTwo.coordinates.Y = board.ActualHeight - playerTwo.height;
+                playerTwo.y = board.ActualHeight - playerTwo.height;
             }
 
             if (PlayerOneHasScored())
