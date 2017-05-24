@@ -75,13 +75,22 @@ namespace Pong
             Human
         }
 
+        public enum Players
+        {
+            PlayerOne,
+            PlayerTwo
+        }
+
         State currentState;// May not be needed
         public Opponent opponentSetting;
+        public string currentWinner;
+        public Players LastScorer;
 
         public Canvas board = new Canvas();
 
         public Manager()
         {
+            board.Background = (Brush)(new BrushConverter().ConvertFrom("#A1004F"));
             ChangeState(State.Menu);//Initializes UI in menu mode
         }
         //Add method to delete previous state
@@ -142,7 +151,7 @@ namespace Pong
     }
 
     public abstract class Stick : GameShape
-    {//Everything from GameShape is automatically passed in although it is not mentioned. All subclasses must still implement them
+    {//Everything from GameShape is automatically passed in although it is not mentioned. All subclasses still implement them
         protected const int movementSpeed = 5;
 
         protected Stick(int x, int y) : base(75, 10)
@@ -150,7 +159,7 @@ namespace Pong
             myShape = new Rectangle();
             myShape.Height = height;
             myShape.Width = width;
-            myShape.Fill = Brushes.Black;
+            myShape.Fill = (Brush)(new BrushConverter().ConvertFrom("#03D4FB"));
             Initialize(x, y);
         }
 
@@ -212,7 +221,14 @@ namespace Pong
             myShape = new Ellipse();
             myShape.Height = height;
             myShape.Width = width;
-            myShape.Fill = Brushes.Crimson;
+            myShape.Fill = (Brush)(new BrushConverter().ConvertFrom("#FFD900"));
+
+            Random rand = new Random();
+            do// make sure that ySpeed is always moving at a speed of at least 5 in either direction
+            {
+                ySpeed = rand.Next(-7, 7);
+            } while (ySpeed < 3 && ySpeed > -3);
+            
 
             x = 200;
             y = 200;
