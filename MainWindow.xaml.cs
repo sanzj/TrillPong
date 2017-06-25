@@ -25,11 +25,10 @@ namespace Pong
         The Manager class simply switches the UI for the current state, the states are the ones that call the switch method though
         The states all have their own UI's, logic, and input handling that they take care of themselves. 
         They also take care of leaving to a different state by calling a manager class
-        The manager has a board which is sort of overtaken by the respective current state when the state is changed, this is how the UI is changed and controlled by the states
+        The manager has a UIboard which is sort of overtaken by the respective current state when the state is changed, this is how the UI is changed and controlled by the states
 
         One thing I should've done and could do in refactoring is implement a factory class that returns the correct state class.
-
-        Have to add the game logo as well as improve the hitting mechanics. I guess I can also add a tune to play while the game is in session.
+        I can also improve AI and tracking to be more dynamic and not start and stop as well as tweak how the ball bounces and hits work.
         */
         Manager manager = new Manager();
 
@@ -82,7 +81,6 @@ namespace Pong
             PlayerTwo
         }
 
-        State currentState;// May not be needed
         public Opponent opponentSetting;
         public string currentWinner;
         public Players LastScorer;
@@ -97,8 +95,6 @@ namespace Pong
         //Add method to delete previous state
         public void ChangeState(State nextState)
         {
-            currentState = nextState;
-
             if (nextState == State.Menu)
             {
                 MenuState menu = new MenuState(this);
@@ -124,7 +120,7 @@ namespace Pong
 
     public abstract class GameShape
     {
-        //public Point coordinates;// May want to use my onw xand y coordinates. Also may want to turn my fields into properties. Using a struct may inadvertentl cause boxing and unboxing issues
+        // Used x and Y as built in coordinate struct gave me problems when boxing and unboxing. Also may want to turn my fields into properties.
         public double x;
         public double y;
         public Shape myShape;
@@ -154,6 +150,7 @@ namespace Pong
     public abstract class Stick : GameShape
     {//Everything from GameShape is automatically passed in although it is not mentioned. All subclasses still implement them
         protected const int movementSpeed = 5;
+        public PlayState.KeyInputs LastDirection;
 
         protected Stick(int x, int y) : base(75, 10)
         {
@@ -181,11 +178,13 @@ namespace Pong
         {
             if (input == PlayState.KeyInputs.Up)
             {
-                y -= 5;
+                y -= movementSpeed;
+                LastDirection = PlayState.KeyInputs.Up;
             }
             else if (input == PlayState.KeyInputs.Down)
             {
-                y += 5;
+                y += movementSpeed;
+                LastDirection = PlayState.KeyInputs.Down;
             }
         }
     }
@@ -200,15 +199,30 @@ namespace Pong
         {
             if (targetY != null)
             {
-                if (y + height < targetY)
+                if(targetY < y + (height / 3) || targetY > y + ((height / 3) * 2))// If target y is not in the middle of the stick
                 {
-                    y += movementSpeed;
-                }
-                else if (y > targetY)
-                {
-                    y -= movementSpeed;
+                    if (targetY > y + (height / 3))
+                    {
+                        y += movementSpeed;
+                        LastDirection = PlayState.KeyInputs.Down;
+                    }
+                    else if (y + ((height / 3) * 2) > targetY)
+                    {
+                        y -= movementSpeed;
+                        LastDirection = PlayState.KeyInputs.Up;
+                    }
                 }
             }
+        }
+
+        public void ChangeTargetY(double? newTarget)
+        {
+            targetY = newTarget;
+        }
+
+        public override void Update()
+        {
+            MoveCoordinates();
         }
     }
 
@@ -216,6 +230,9 @@ namespace Pong
     {
         public int xSpeed = 5;
         public int ySpeed = 2;
+        private int xSpeedMax = 15;
+        private int ySpeedMax = 25;
+        public int randomSeed = new Random().Next();//I need to know the random number in another class, so I could just save the seed here and generate the number elsewhere
 
         public Ball() : base(25, 25)
         {
@@ -235,20 +252,45 @@ namespace Pong
             y = 200;
         }
 
-        public void BounceOffHit(bool hasHitAStick)
+        public void BounceOffWall()
         {
-            if (hasHitAStick == true)
-            {
-                Random rand = new Random(); //I may want to implement a different algorithm that used doubles for speed to allow more flexibility
-
-                xSpeed = xSpeed * -1;
-                xSpeed = (xSpeed >= 0) ? xSpeed + rand.Next(0, 2) : xSpeed - rand.Next(0, 2);
-                ySpeed = (ySpeed >= 0) ? ySpeed + rand.Next(-1, 2) : ySpeed - rand.Next(-1, 2);
-            }
-            else
-            {
                 ySpeed = ySpeed * -1;
+        }
+
+        public void BounceOffHit(PlayState.KeyInputs LastInput)
+        {
+            Random rand = new Random(randomSeed); //I may want to implement a different algorithm that used doubles for speed to allow more flexibility
+
+            xSpeed = xSpeed * -1;
+            xSpeed = (xSpeed >= 0) ? xSpeed + rand.Next(0, 2) : xSpeed - rand.Next(0, 2);
+            if(xSpeed > xSpeedMax)
+            {
+                xSpeed = xSpeedMax;
             }
+            else if(xSpeed < -xSpeedMax)
+            {
+                xSpeed = -xSpeedMax;
+            }
+
+            if (LastInput == PlayState.KeyInputs.Up)
+            {
+                ySpeed = (ySpeed >= 0) ? (ySpeed * -1) - rand.Next(0, 2) : ySpeed + rand.Next(0, 3);
+            }
+            else //Last input == down
+            {
+                ySpeed = (ySpeed >= 0) ? ySpeed + rand.Next(0, 3) : (ySpeed * -1) + rand.Next(0, 2);
+            }
+
+            if(ySpeed > ySpeedMax)
+            {
+                ySpeed = ySpeedMax;
+            }
+            else if(ySpeed < -ySpeedMax)
+            {
+                ySpeed = -ySpeedMax;
+            }
+
+            randomSeed = new Random().Next();
         }
 
         protected override void MoveCoordinates()

@@ -13,6 +13,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
 using System.Reflection;
+using System.Media;
 
 namespace Pong
 {
@@ -35,47 +36,108 @@ namespace Pong
 
     public class MenuState : GameState
     {
+        Button startButton;
+        Button PlayerButton;
+        Button AIButton;
+
+        BitmapImage Title = new BitmapImage(new Uri(@"pack://application:,,,/Images/PONG_Title.png"));// Uri's are used when your appplication may use files not always in the same pah across multiple devices, so almost anytime your app is distributed outside just your own joint
+        Image TitleUI = new Image();
+
+        Brush selectedColor = (Brush)(new BrushConverter().ConvertFrom("#FFD900"));
+
+        SoundPlayer sp;
+
         public MenuState(Manager myManager) : base(myManager) { }
 
         protected override void InitializeUI()
         {
-            //Grid menuGrid = new Grid();
-
-            Button startButton = new Button();
+            startButton = new Button();
             startButton.Click += StartButton_Click;
-            startButton.Content = "Start Game";
-            Canvas.SetTop(startButton, 350);
-            Canvas.SetLeft(startButton, 225);
+            startButton.Loaded += StartButton_Loaded;
+            startButton.Height = 100;
+            startButton.Width = 200;
+            startButton.Content = "START GAME";
 
-            Button PlayerButton = new Button();
+            PlayerButton = new Button();
             PlayerButton.Click += PlayerButton_Click;
-            PlayerButton.Content = "Player";
-            Canvas.SetTop(PlayerButton, 200);
-            Canvas.SetLeft(PlayerButton, 200);
+            PlayerButton.Loaded += PlayerButton_Loaded;
+            PlayerButton.Height = 50;
+            PlayerButton.Width = 125;
+            PlayerButton.Content = "PLAYER";
+            PlayerButton.Background = Brushes.LightGray;
 
-            Button AIButton = new Button();
+            AIButton = new Button();
             AIButton.Click += AIButton_Click;
+            AIButton.Loaded += AIButton_Loaded;
+            AIButton.Height = 50;
+            AIButton.Width = 125;
             AIButton.Content = "AI";
-            Canvas.SetTop(AIButton, 200);
-            Canvas.SetLeft(AIButton, 300);
+            AIButton.Background = Brushes.LightGray;
+
+            TitleUI.Source = Title;
+            TitleUI.Height = 125;
+            TitleUI.Loaded += TitleUI_Loaded;
+
+            if (myManager.opponentSetting == Manager.Opponent.AI)
+            {
+                AIButton.Background = selectedColor;
+            }
+            else
+            {
+                PlayerButton.Background = selectedColor;
+            }
 
             board.Children.Add(startButton);
             board.Children.Add(PlayerButton);
             board.Children.Add(AIButton);
+            board.Children.Add(TitleUI);
+
+            var sri = Application.GetResourceStream(new Uri("pack://application:,,,/Pong;component/Sounds/PongMenuTheme.wav"));
+            sp = new SoundPlayer(sri.Stream);
+            sp.PlayLooping();
+        }
+
+        private void AIButton_Loaded(object sender, RoutedEventArgs e)
+        {
+            Canvas.SetTop(AIButton, 225);
+            Canvas.SetLeft(AIButton, ((board.ActualWidth - startButton.ActualWidth) / 2) + 40);
+        }
+
+        private void PlayerButton_Loaded(object sender, RoutedEventArgs e)
+        {
+            Canvas.SetTop(PlayerButton, 175);
+            Canvas.SetLeft(PlayerButton, ((board.ActualWidth - startButton.ActualWidth) / 2) + 40);
+        }
+
+        private void StartButton_Loaded(object sender, RoutedEventArgs e) //Actual width and other control properties are only initialized when the control is loaded
+        {
+            Canvas.SetTop(startButton, 325);
+            Canvas.SetLeft(startButton, (board.ActualWidth - startButton.ActualWidth) / 2);
+        }
+
+        private void TitleUI_Loaded(object sender, RoutedEventArgs e)
+        {
+            Canvas.SetTop(TitleUI, 25);
+            Canvas.SetLeft(TitleUI, (board.ActualWidth - TitleUI.ActualWidth) / 2);
         }
 
         private void AIButton_Click(object sender, RoutedEventArgs e)
         {
             myManager.opponentSetting = Manager.Opponent.AI;
+            AIButton.Background = selectedColor;
+            PlayerButton.Background = Brushes.LightGray;
         }
 
         private void PlayerButton_Click(object sender, RoutedEventArgs e)
         {
             myManager.opponentSetting = Manager.Opponent.Human;
+            PlayerButton.Background = selectedColor;
+            AIButton.Background = Brushes.LightGray;
         }
 
         private void StartButton_Click(object sender, RoutedEventArgs e)
         {
+            sp.Stop();
             myManager.ChangeState(Manager.State.Play);
         }
     }
@@ -83,23 +145,30 @@ namespace Pong
     public class GameOverState : GameState
     {
         System.Windows.Threading.DispatcherTimer GameOverTimer;
+        Label gameOverLabel = new Label();
 
         public GameOverState(Manager myManager) : base(myManager)
         {
             GameOverTimer = new System.Windows.Threading.DispatcherTimer();
-            GameOverTimer.Interval = new TimeSpan(0, 0, 2);
+            GameOverTimer.Interval = new TimeSpan(0, 0, 3);
             GameOverTimer.Tick += GameOverTimer_Tick;
-            GameOverTimer.Start();
+            GameOverTimer.Start();            
         }
 
         protected override void InitializeUI()
         {
-            Label gameOverLabel = new Label();
-            gameOverLabel.Content = string.Format("{0} Has Won The Game", "Somebody");
-            Canvas.SetLeft(gameOverLabel, 175);
-            Canvas.SetTop(gameOverLabel, 250);
-
+            gameOverLabel.Content = string.Format("{0} HAS WON THE GAME", myManager.currentWinner);
+            gameOverLabel.Foreground = (Brush)(new BrushConverter().ConvertFrom("#FFD900"));
+            gameOverLabel.FontSize = 23;
+            gameOverLabel.Loaded += GameOverLabel_Loaded;
+            
             board.Children.Add(gameOverLabel);
+        }
+
+        private void GameOverLabel_Loaded(object sender, RoutedEventArgs e)
+        {
+            Canvas.SetTop(gameOverLabel, 200);
+            Canvas.SetLeft(gameOverLabel, ((board.ActualWidth - gameOverLabel.ActualWidth) / 2) + 10);
         }
 
         private void GameOverTimer_Tick(object sender, EventArgs e)
@@ -119,6 +188,12 @@ namespace Pong
             Down
         }
 
+        public enum HitLocation
+        {
+            Top,
+            Bottom
+        }
+
         protected HumanStick playerOne;
         protected dynamic playerTwo;
         protected Ball gameBall;
@@ -133,10 +208,12 @@ namespace Pong
         public KeyInputs playerTwoKeyInput;
 
         System.Windows.Threading.DispatcherTimer frameTimer;
+        protected SoundPlayer sp;
 
         public PlayState(Manager myManager) : base(myManager)
         {
             InitializeTimer();
+            InitializeSound();
             InitializeKeyEventHandlers();
         }
 
@@ -172,8 +249,14 @@ namespace Pong
 
         void InitializeScoreTable()
         {
+            Brush labelColor = (Brush)(new BrushConverter().ConvertFrom("#00AFD0"));
             playerOneLabel = new Label();
             playerTwoLabel = new Label();
+            playerOneLabel.FontSize = 20;
+            playerTwoLabel.FontSize = 20;
+            playerOneLabel.Foreground = labelColor;
+            playerTwoLabel.Foreground = labelColor;
+
             Canvas.SetLeft(playerOneLabel, 300);
             Canvas.SetLeft(playerTwoLabel, 250);
             board.Children.Add(playerOneLabel);
@@ -185,6 +268,19 @@ namespace Pong
         {
             board.Children.Remove(gameBall.myShape);
             gameBall = new Ball();
+
+            if(myManager.LastScorer == Manager.Players.PlayerOne)
+            {
+                gameBall.x = playerOne.x - 10;
+                gameBall.y = playerOne.y + 10;
+            }
+            else if(myManager.LastScorer == Manager.Players.PlayerTwo)
+            {
+                gameBall.xSpeed = gameBall.xSpeed * -1;
+                gameBall.x = playerTwo.x + 10;
+                gameBall.y = playerTwo.y + 10;
+            }
+
             board.Children.Add(gameBall.myShape);
         }
 
@@ -192,6 +288,14 @@ namespace Pong
         {
             playerOneLabel.Content = playerOneScore;
             playerTwoLabel.Content = playerTwoScore;
+        }
+
+        protected void InitializeSound()
+        {
+            var sri = Application.GetResourceStream(new Uri("pack://application:,,,/Pong;component/Sounds/PongHit.wav"));//Using a relative path is kind of extra for media files in wpf
+            //sp = new SoundPlayer(@"C:\Users\dj\Desktop\Programs\Pong2\PongHit.wav");
+            sp = new SoundPlayer(sri.Stream);
+            sp.Load();
         }
 
         public void InitializeKeyEventHandlers()
@@ -322,8 +426,16 @@ namespace Pong
 
         protected bool GameHasBeenWon()
         {
-            if (playerOneScore == 3 || playerTwoScore == 3)
+            if (playerOneScore == 3)
+            {
+                myManager.currentWinner = "PLAYER ONE";
                 return true;
+            }
+            else if (playerTwoScore == 3)
+            {
+                myManager.currentWinner = "PLAYER TWO";
+                return true;
+            }
             else
                 return false;
         }
@@ -332,19 +444,22 @@ namespace Pong
         {
             if (PlayerOneHasHitBall())
             {
-                gameBall.BounceOffHit(true);
+                gameBall.BounceOffHit(playerOne.LastDirection);
                 gameBall.x = playerOne.x - gameBall.width;
+                sp.Play();
             }
 
             if (PlayerTwoHasHitBall())
             {
-                gameBall.BounceOffHit(true);
-                gameBall.x = playerTwo.x + gameBall.width;
+                gameBall.BounceOffHit(playerTwo.LastDirection);
+                gameBall.x = playerTwo.x + playerTwo.width;
+                sp.Play();
             }
 
             if (BallHasHitTopOrBottom())
             {
-                gameBall.BounceOffHit(false);
+                gameBall.BounceOffWall();
+                sp.Play();
             }
 
             if (StickOneHasHitTop())
@@ -355,10 +470,10 @@ namespace Pong
             {
                 playerOne.y = board.ActualHeight - playerOne.height;
             }
-            //The Second stick checks are not working it may have something to do with stick two being dynamic IDK tho
+            //The Second stick checks are not working it may have something to do with stick two being dynamic IDK tho. Was a result of unboxing in using a struct to hold it. Changed
             if (StickTwoHasHitTop())
             {
-                playerTwo.y = 0; // This line is performed but the value does not change
+                playerTwo.y = 0;
             }
             else if (StickTwoHasHitBottom())
             {
@@ -367,12 +482,14 @@ namespace Pong
 
             if (PlayerOneHasScored())
             {
+                myManager.LastScorer = Manager.Players.PlayerOne;
                 playerOneScore++;
                 UpdateScore();
                 ServeBall();
             }
             else if (PlayerTwoHasScored())
             {
+                myManager.LastScorer = Manager.Players.PlayerTwo;
                 playerTwoScore++;
                 UpdateScore();
                 ServeBall();
@@ -415,10 +532,19 @@ namespace Pong
         double FindYIntersection()
         {//Currently does not take into account the speed change on a hit in ball. I could maybe use the same random seed as in ball or not IDk. Either its off sometimes rn
             Double targetX = playerTwo.x;
-            double x = gameBall.x;
-            double y = gameBall.y;
-            double xSpeed = gameBall.xSpeed;
-            double ySpeed = gameBall.ySpeed;
+            Ball sampleBall = new Ball();
+            sampleBall.randomSeed = gameBall.randomSeed;
+            sampleBall.x = gameBall.x;
+            sampleBall.y = gameBall.y;
+            sampleBall.xSpeed = gameBall.xSpeed;
+            sampleBall.ySpeed = gameBall.ySpeed;
+
+            double x = sampleBall.x;
+            double y = sampleBall.y;
+            double xSpeed = sampleBall.xSpeed;
+            double ySpeed = sampleBall.ySpeed;
+
+            //sampleBall.BounceOffHit(playerOne.LastDirection);
 
             while (x > targetX)
             {
@@ -429,6 +555,16 @@ namespace Pong
                     ySpeed = ySpeed * -1;
                 }
             }
+
+            //while (x > targetX)
+            //{
+            //    x += xSpeed;
+            //    y += ySpeed;
+            //    if (y <= 0 || y >= board.ActualHeight)
+            //    {
+            //        ySpeed = ySpeed * -1;
+            //    }
+            //}
             return y;
         }
 
@@ -436,21 +572,23 @@ namespace Pong
         {
             if (PlayerOneHasHitBall())
             {
-                gameBall.BounceOffHit(true);
+                gameBall.BounceOffHit(playerOne.LastDirection);
                 gameBall.x = playerOne.x - gameBall.width;
-
+                sp.Play();
                 playerTwo.targetY = FindYIntersection();
             }
 
             if (PlayerTwoHasHitBall())
             {
-                gameBall.BounceOffHit(true);
-                gameBall.x = playerTwo.x + gameBall.width;
+                gameBall.BounceOffHit(playerOne.LastDirection);
+                gameBall.x = playerTwo.x + playerTwo.width;
+                sp.Play();
             }
 
             if (BallHasHitTopOrBottom())
             {
-                gameBall.BounceOffHit(false);
+                gameBall.BounceOffWall();
+                sp.Play();
             }
 
             if (StickOneHasHitTop())
@@ -461,7 +599,7 @@ namespace Pong
             {
                 playerOne.y = board.ActualHeight - playerOne.height;
             }
-            //The Second stick checks are not working it may have something to do with stick two being dynamic IDK tho
+            //The Second stick checks were at one point due to being dynamic and using a struct to contain my coordinates. Something about boxing and unboxing
             if (StickTwoHasHitTop())
             {
                 playerTwo.y = 0;
@@ -473,12 +611,14 @@ namespace Pong
 
             if (PlayerOneHasScored())
             {
+                myManager.LastScorer = Manager.Players.PlayerOne;
                 playerOneScore++;
                 UpdateScore();
                 ServeBall();
             }
             else if (PlayerTwoHasScored())
             {
+                myManager.LastScorer = Manager.Players.PlayerTwo;
                 playerTwoScore++;
                 UpdateScore();
                 ServeBall();
@@ -494,7 +634,6 @@ namespace Pong
         protected override void InitializePlayerTwo()
         {
             playerTwo = new HumanStick(25, 350);
-            //playerTwo = (HumanStick)Activator.CreateInstance(typeof(HumanStick));
         }
 
         public override void OnKeyPressed(object sender, KeyEventArgs e)
